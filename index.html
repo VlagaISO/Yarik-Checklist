@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Директор Денчик — тестирование</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#151d31;--muted:#9aa8c2;--line:#293550;--accent:#83a7ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f4f6fb;font:15px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
+header{padding:24px 18px 14px;max-width:980px;margin:auto}h1{font-size:25px;margin:0 0 7px}.sub{color:var(--muted)}
+main{max-width:980px;margin:auto;padding:0 14px 60px}.panel,.section{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+input,textarea,select{width:100%;background:#0e1628;border:1px solid var(--line);color:white;border-radius:9px;padding:10px;font:inherit}textarea{min-height:70px;resize:vertical}
+.progress{height:9px;background:#26324b;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0}
+.stats{display:flex;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:13px}.pill{padding:6px 9px;background:#0e1628;border:1px solid var(--line);border-radius:99px}
+.section h2{font-size:17px;margin:0 0 12px}.test{border-top:1px solid var(--line);padding:12px 0}.test:first-of-type{border-top:0}
+.testname{font-weight:550;margin-bottom:9px}.controls{display:grid;grid-template-columns:minmax(145px,190px) 1fr;gap:8px}
+small,.hint{color:var(--muted)}button{background:#243452;color:white;border:1px solid #3b5076;border-radius:9px;padding:10px 13px;font-weight:600}
+#sync{font-size:12px;color:#a9bbdc}.warn{color:#ffd58b;font-size:13px;line-height:1.45}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.controls{grid-template-columns:1fr}.testname{line-height:1.4}}
+</style></head><body>
+<header><h1>Директор Денчик</h1><div class="sub">Общий чек-лист тестирования · 13 разделов · 98 проверок</div></header>
+<main>
+<div class="panel">
+ <div class="warn">Внимание: любой человек, у которого есть ссылка, сможет просматривать и изменять результаты тестирования. Не размещайте здесь личные или финансовые данные.</div>
+ <p id="sync">Подключение к общей базе…</p>
+ <div class="grid">
+  <div><label>Имя тестировщика</label><input id="tester" placeholder="Например, Денис"></div>
+  <div><label>Модель iPhone</label><input id="device" placeholder="Например, iPhone 15 Pro"></div>
+  <div><label>Версия iOS</label><input id="ios" placeholder="Например, iOS 18.5"></div>
+  <div><label>Дата тестирования</label><input id="date" type="date"></div>
+ </div>
+ <div style="margin-top:12px"><label>Общие замечания</label><textarea id="general" placeholder="Общие комментарии по тестированию…"></textarea></div>
+ <div class="progress"><div class="bar" id="bar"></div></div>
+ <div class="stats" id="stats"></div>
+ <p><button id="csv">Скачать CSV-отчёт</button> <button id="txt">Скачать TXT-отчёт</button></p>
+ <small>Изменения сохраняются автоматически. Синхронизация между устройствами выполняется через общую базу данных.</small>
+</div>
+<div id="sections"></div>
+</main>
+<script>
+const ITEMS = [{"id": "1.1", "section": "Запуск и интерфейс", "text": "Приложение запускается без вылетов"}, {"id": "1.2", "section": "Запуск и интерфейс", "text": "Первый запуск отображается корректно"}, {"id": "1.3", "section": "Запуск и интерфейс", "text": "Экран загрузки не зависает"}, {"id": "1.4", "section": "Запуск и интерфейс", "text": "Навигация между основными экранами работает"}, {"id": "1.5", "section": "Запуск и интерфейс", "text": "Элементы интерфейса не обрезаются на экране iPhone"}, {"id": "1.6", "section": "Запуск и интерфейс", "text": "Интерфейс корректно адаптируется к светлой/тёмной теме"}, {"id": "2.1", "section": "PIN и Face ID", "text": "Можно создать PIN-код"}, {"id": "2.2", "section": "PIN и Face ID", "text": "PIN-код запрашивается при повторном входе"}, {"id": "2.3", "section": "PIN и Face ID", "text": "Неверный PIN не открывает приложение"}, {"id": "2.4", "section": "PIN и Face ID", "text": "Face ID включается и проходит проверку"}, {"id": "2.5", "section": "PIN и Face ID", "text": "При отмене Face ID доступен предусмотренный альтернативный способ входа"}, {"id": "3.1", "section": "Главная", "text": "Главный экран открывается без ошибок"}, {"id": "3.2", "section": "Главная", "text": "Отображается актуальный общий баланс"}, {"id": "3.3", "section": "Главная", "text": "Баланс обновляется после добавления операции"}, {"id": "3.4", "section": "Главная", "text": "Сводка доходов и расходов соответствует операциям"}, {"id": "3.5", "section": "Главная", "text": "Виджеты и основные показатели отображаются корректно"}, {"id": "4.1", "section": "Операции", "text": "Можно создать расход"}, {"id": "4.2", "section": "Операции", "text": "Можно создать доход"}, {"id": "4.3", "section": "Операции", "text": "Можно отредактировать операцию"}, {"id": "4.4", "section": "Операции", "text": "Можно удалить операцию"}, {"id": "4.5", "section": "Операции", "text": "Сумма операции сохраняется корректно"}, {"id": "4.6", "section": "Операции", "text": "Дата операции сохраняется корректно"}, {"id": "4.7", "section": "Операции", "text": "Категория операции выбирается и сохраняется"}, {"id": "4.8", "section": "Операции", "text": "Перевод между собственными счетами не учитывается как расход"}, {"id": "5.1", "section": "Бюджет", "text": "Можно создать бюджет"}, {"id": "5.2", "section": "Бюджет", "text": "Можно изменить лимит бюджета"}, {"id": "5.3", "section": "Бюджет", "text": "Расходы учитываются в правильной категории"}, {"id": "5.4", "section": "Бюджет", "text": "Остаток бюджета рассчитывается корректно"}, {"id": "5.5", "section": "Бюджет", "text": "Превышение лимита отображается корректно"}, {"id": "5.6", "section": "Бюджет", "text": "Изменение операции пересчитывает бюджет"}, {"id": "5.7", "section": "Бюджет", "text": "Удаление операции пересчитывает бюджет"}, {"id": "6.1", "section": "Календарь", "text": "Календарь открывается без ошибок"}, {"id": "6.2", "section": "Календарь", "text": "Операции отображаются на правильных датах"}, {"id": "6.3", "section": "Календарь", "text": "Можно переключать месяцы"}, {"id": "6.4", "section": "Календарь", "text": "Выбор даты показывает операции за этот день"}, {"id": "6.5", "section": "Календарь", "text": "Итоги за выбранный период рассчитываются корректно"}, {"id": "7.1", "section": "Импорт банковских выписок PDF / CSV", "text": "Открывается системный выбор файлов iOS Files"}, {"id": "7.2", "section": "Импорт банковских выписок PDF / CSV", "text": "Можно выбрать PDF-файл выписки"}, {"id": "7.3", "section": "Импорт банковских выписок PDF / CSV", "text": "Можно выбрать CSV-файл выписки"}, {"id": "7.4", "section": "Импорт банковских выписок PDF / CSV", "text": "Можно выбрать несколько файлов за один раз"}, {"id": "7.5", "section": "Импорт банковских выписок PDF / CSV", "text": "Множественный выбор выполняется через чекбоксы"}, {"id": "7.6", "section": "Импорт банковских выписок PDF / CSV", "text": "После выбора и нажатия «Открыть» приложение получает выбранные файлы"}, {"id": "7.7", "section": "Импорт банковских выписок PDF / CSV", "text": "Импортированный файл копируется в Application Support/ImportedStatements"}, {"id": "7.8", "section": "Импорт банковских выписок PDF / CSV", "text": "PDF-файл разбирается без ошибки"}, {"id": "7.9", "section": "Импорт банковских выписок PDF / CSV", "text": "CSV-файл разбирается без ошибки"}, {"id": "7.10", "section": "Импорт банковских выписок PDF / CSV", "text": "Из выписки извлекаются даты операций"}, {"id": "7.11", "section": "Импорт банковских выписок PDF / CSV", "text": "Из выписки извлекаются суммы операций"}, {"id": "7.12", "section": "Импорт банковских выписок PDF / CSV", "text": "Из выписки извлекаются описания операций"}, {"id": "7.13", "section": "Импорт банковских выписок PDF / CSV", "text": "Импортированные операции добавляются в список операций"}, {"id": "7.14", "section": "Импорт банковских выписок PDF / CSV", "text": "После импорта пересчитывается общий баланс"}, {"id": "7.15", "section": "Импорт банковских выписок PDF / CSV", "text": "После импорта пересчитываются бюджеты"}, {"id": "7.16", "section": "Импорт банковских выписок PDF / CSV", "text": "Успешный импорт фиксируется в журнале действий"}, {"id": "7.17", "section": "Импорт банковских выписок PDF / CSV", "text": "Ошибка импорта фиксируется в журнале действий и понятна пользователю"}, {"id": "7.18", "section": "Импорт банковских выписок PDF / CSV", "text": "Переводы между собственными счетами не попадают в расходы"}, {"id": "7.19", "section": "Импорт банковских выписок PDF / CSV", "text": "Повторный импорт одной выписки не создаёт дубликаты операций"}, {"id": "8.1", "section": "Внутреннее хранилище выписок", "text": "Импортированные выписки доступны во внутреннем хранилище"}, {"id": "8.2", "section": "Внутреннее хранилище выписок", "text": "Сохранённый PDF можно открыть"}, {"id": "8.3", "section": "Внутреннее хранилище выписок", "text": "Сохранённый файл не пропадает после перезапуска приложения"}, {"id": "8.4", "section": "Внутреннее хранилище выписок", "text": "Повторный импорт корректно распознаётся как дубликат"}, {"id": "8.5", "section": "Внутреннее хранилище выписок", "text": "Хранилище показывает актуальный список выписок"}, {"id": "8.6", "section": "Внутреннее хранилище выписок", "text": "Одновременно хранится не более трёх PDF-выписок"}, {"id": "8.7", "section": "Внутреннее хранилище выписок", "text": "При добавлении четвёртой PDF-выписки удаляется самая старая копия"}, {"id": "8.8", "section": "Внутреннее хранилище выписок", "text": "Удаление старой копии PDF не удаляет уже импортированные операции"}, {"id": "9.1", "section": "Журнал действий", "text": "Журнал действий открывается"}, {"id": "9.2", "section": "Журнал действий", "text": "Успешное добавление операции записывается в журнал"}, {"id": "9.3", "section": "Журнал действий", "text": "Редактирование операции записывается в журнал"}, {"id": "9.4", "section": "Журнал действий", "text": "Удаление операции записывается в журнал"}, {"id": "9.5", "section": "Журнал действий", "text": "Успешный импорт выписки записывается в журнал"}, {"id": "9.6", "section": "Журнал действий", "text": "Ошибка импорта выписки записывается в журнал"}, {"id": "9.7", "section": "Журнал действий", "text": "Резервное копирование записывается в журнал"}, {"id": "9.8", "section": "Журнал действий", "text": "Время событий отображается корректно"}, {"id": "10.1", "section": "Резервное копирование и восстановление", "text": "Можно создать резервную копию"}, {"id": "10.2", "section": "Резервное копирование и восстановление", "text": "Создание копии завершается без ошибки"}, {"id": "10.3", "section": "Резервное копирование и восстановление", "text": "Файл резервной копии сохраняется в выбранное место"}, {"id": "10.4", "section": "Резервное копирование и восстановление", "text": "Можно выбрать ранее созданную резервную копию"}, {"id": "10.5", "section": "Резервное копирование и восстановление", "text": "Восстановление данных завершается без ошибки"}, {"id": "10.6", "section": "Резервное копирование и восстановление", "text": "После восстановления отображаются операции"}, {"id": "10.7", "section": "Резервное копирование и восстановление", "text": "После восстановления отображаются бюджеты и счета"}, {"id": "10.8", "section": "Резервное копирование и восстановление", "text": "После восстановления приложение продолжает работать корректно"}, {"id": "11.1", "section": "Экспорт операций", "text": "Можно открыть экран экспорта"}, {"id": "11.2", "section": "Экспорт операций", "text": "Можно выбрать период экспорта"}, {"id": "11.3", "section": "Экспорт операций", "text": "Экспорт содержит операции выбранного периода"}, {"id": "11.4", "section": "Экспорт операций", "text": "Суммы и даты в экспортированном файле корректны"}, {"id": "11.5", "section": "Экспорт операций", "text": "Экспортированный файл можно сохранить через системное меню iOS"}, {"id": "11.6", "section": "Экспорт операций", "text": "Экспорт не изменяет данные внутри приложения"}, {"id": "12.1", "section": "Стабильность и сохранность данных", "text": "Приложение не теряет данные после обычного закрытия"}, {"id": "12.2", "section": "Стабильность и сохранность данных", "text": "Данные сохраняются после принудительного закрытия"}, {"id": "12.3", "section": "Стабильность и сохранность данных", "text": "Данные сохраняются после перезагрузки iPhone"}, {"id": "12.4", "section": "Стабильность и сохранность данных", "text": "Быстрое переключение между экранами не вызывает вылет"}, {"id": "12.5", "section": "Стабильность и сохранность данных", "text": "Большой список операций отображается без зависаний"}, {"id": "12.6", "section": "Стабильность и сохранность данных", "text": "Некорректный файл не приводит к потере существующих данных"}, {"id": "12.7", "section": "Стабильность и сохранность данных", "text": "Ошибки не приводят к появлению некорректного баланса"}, {"id": "12.8", "section": "Стабильность и сохранность данных", "text": "После длительной работы приложение остаётся стабильным"}, {"id": "13.1", "section": "Сброс приложения", "text": "Экран сброса открывается"}, {"id": "13.2", "section": "Сброс приложения", "text": "Перед сбросом отображается предупреждение"}, {"id": "13.3", "section": "Сброс приложения", "text": "Сброс требует явного подтверждения"}, {"id": "13.4", "section": "Сброс приложения", "text": "После подтверждения данные очищаются согласно описанию"}, {"id": "13.5", "section": "Сброс приложения", "text": "После сброса приложение запускается в начальном состоянии"}];
+const STATUSES=['Не проверено','Работает','Ошибка','Частично'];
+const params=new URLSearchParams(location.search);
+const SUPABASE_URL=params.get('supabaseUrl')||'';
+const SUPABASE_KEY=params.get('supabaseAnonKey')||'';
+let db=null, rows={}, meta={}, busy=false, debounce={};
+const $=id=>document.getElementById(id);
+function setSync(s){$('sync').textContent=s}
+function safe(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){
+ const root=$('sections');root.innerHTML='';
+ const groups=[...new Set(ITEMS.map(x=>x.section))];
+ groups.forEach((name,idx)=>{
+  const sec=document.createElement('section');sec.className='section';
+  const list=ITEMS.filter(x=>x.section===name);
+  sec.innerHTML=`<h2>${idx+1}. ${safe(name)} <small>(${list.length})</small></h2>`;
+  list.forEach(it=>{
+   const r=rows[it.id]||{status:'Не проверено',note:'',tester:''};
+   const div=document.createElement('div');div.className='test';
+   div.innerHTML=`<div class="testname">${it.id}. ${safe(it.text)}</div>
+   <div class="controls"><select aria-label="Статус проверки" data-status="${it.id}">${STATUSES.map(s=>`<option ${r.status===s?'selected':''}>${s}</option>`).join('')}</select>
+   <input aria-label="Комментарий" data-note="${it.id}" placeholder="Комментарий / шаги воспроизведения" value="${safe(r.note)}"></div>`;
+   sec.appendChild(div);
+  });root.appendChild(sec);
+ });
+ root.querySelectorAll('[data-status]').forEach(el=>el.addEventListener('change',()=>saveItem(el.dataset.status,{status:el.value})));
+ root.querySelectorAll('[data-note]').forEach(el=>el.addEventListener('input',()=>{const id=el.dataset.note;clearTimeout(debounce[id]);debounce[id]=setTimeout(()=>saveItem(id,{note:el.value}),450)}));
+ updateStats();
+}
+function updateStats(){
+ const counts=Object.fromEntries(STATUSES.map(s=>[s,0]));ITEMS.forEach(i=>counts[(rows[i.id]||{}).status||'Не проверено']++);
+ const done=ITEMS.length-counts['Не проверено'];$('bar').style.width=(done/ITEMS.length*100)+'%';
+ $('stats').innerHTML=`<span class="pill">Всего: ${ITEMS.length}</span><span class="pill">Проверено: ${done}</span><span class="pill">Работает: ${counts['Работает']}</span><span class="pill">Ошибки: ${counts['Ошибка']}</span><span class="pill">Частично: ${counts['Частично']}</span><span class="pill">Не проверено: ${counts['Не проверено']}</span>`;
+}
+async function saveItem(id,patch){
+ if(!db)return;const old=rows[id]||{status:'Не проверено',note:'',tester:''};
+ const next={...old,...patch,tester:$('tester').value,updated_at:new Date().toISOString()};rows[id]=next;updateStats();
+ const {error}=await db.from('checklist_state').upsert({id,...next});
+ if(error)setSync('Ошибка сохранения: '+error.message);else setSync('Сохранено · '+new Date().toLocaleTimeString());
+}
+async function saveMeta(){
+ if(!db)return;
+ const payload={id:1,device:$('device').value,ios_version:$('ios').value,general_note:$('general').value,updated_at:new Date().toISOString()};
+ const {error}=await db.from('checklist_meta').upsert(payload);
+ if(error)setSync('Ошибка синхронизации: '+error.message);
+}
+async function init(){
+ if(!SUPABASE_URL||!SUPABASE_KEY){setSync('Нужно подключить бесплатную базу Supabase — см. README.');return}
+ db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+ const [a,b]=await Promise.all([db.from('checklist_state').select('*'),db.from('checklist_meta').select('*').eq('id',1).maybeSingle()]);
+ if(a.error||b.error){setSync('Не удалось загрузить базу: '+(a.error||b.error).message);return}
+ (a.data||[]).forEach(x=>rows[x.id]=x);meta=b.data||{};
+ $('device').value=meta.device||'';$('ios').value=meta.ios_version||'';$('general').value=meta.general_note||'';
+ render();setSync('Синхронизация подключена · '+new Date().toLocaleTimeString());
+ db.channel('public-checklist').on('postgres_changes',{event:'*',schema:'public',table:'checklist_state'},p=>{
+  if(p.new?.id){rows[p.new.id]=p.new;render();}
+  if(p.old?.id&&p.eventType==='DELETE'){delete rows[p.old.id];render();}
+ }).on('postgres_changes',{event:'*',schema:'public',table:'checklist_meta'},p=>{
+  const m=p.new||{};if(document.activeElement!==$('device'))$('device').value=m.device||'';
+  if(document.activeElement!==$('ios'))$('ios').value=m.ios_version||'';
+  if(document.activeElement!==$('general'))$('general').value=m.general_note||'';
+ }).subscribe(s=>setSync(s==='SUBSCRIBED'?'Онлайн · синхронизация активна':'Состояние синхронизации: '+s));
+ // Fallback refresh to cover missed realtime events
+ setInterval(async()=>{if(!db)return;const {data}=await db.from('checklist_state').select('*');if(data){data.forEach(x=>rows[x.id]=x);render();}},12000);
+}
+['tester','device','ios','general'].forEach(id=>$(id).addEventListener('input',()=>{clearTimeout(debounce[id]);debounce[id]=setTimeout(saveMeta,500)}));
+function download(name,content,type){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+function report(){return ITEMS.map(i=>({...i,...(rows[i.id]||{status:'Не проверено',note:''})}))}
+$('csv').onclick=()=>{const data=report();const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';download('denchik-test-report.csv','Пункт;Раздел;Проверка;Статус;Комментарий\n'+data.map(x=>[x.id,x.section,x.text,x.status,x.note].map(q).join(';')).join('\n'),'text/csv;charset=utf-8')};
+$('txt').onclick=()=>{const data=report();download('denchik-test-report.txt',data.map(x=>`${x.id} [${x.status}] ${x.text}\nКомментарий: ${x.note||'—'}`).join('\n\n')+'\n\nОбщие замечания: '+$('general').value,'text/plain;charset=utf-8')};
+$('date').value=new Date().toISOString().slice(0,10);render();init();
+</script></body></html>
